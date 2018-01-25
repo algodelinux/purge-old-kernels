@@ -49,8 +49,15 @@ done
 # Build our list of kernel packages to purge
 if [ $(uname -r|grep pve) ]; then
    CANDIDATES=$(ls -tr /boot/vmlinuz-* | head -n -${KEEP} | grep -v "$(uname -r)$" | cut -d- -f2- | awk '{print "pve-kernel-" $0 " pve-headers-" $0}' )
+   REMOVED=$(dpkg -l| grep ^rc | awk '{print $2}' | grep -e pve-kernel -e pve-keaders)
 else
    CANDIDATES=$(ls -tr /boot/vmlinuz-* | head -n -${KEEP} | grep -v "$(uname -r)$" | cut -d- -f2- | awk '{print "linux-image-" $0 " linux-headers-" $0}' )
+   REMOVED=$(dpkg -l| grep ^rc | awk '{print $2}' | grep -e linux-image -e linux-keaders)
+fi
+
+if [ -n "$REMOVED" ]; then
+   # Purge old uninstalled kernels
+   apt-get $APT_OPTS remove --purge $REMOVED
 fi
 
 for c in $CANDIDATES; do
@@ -62,4 +69,6 @@ if [ -z "$PURGE" ]; then
 	exit 0
 fi
 
+# Purge old installed kernels
 apt-get $APT_OPTS remove --purge $PURGE
+
