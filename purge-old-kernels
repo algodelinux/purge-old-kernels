@@ -53,11 +53,17 @@ if [ $(uname -r|grep pve) ]; then
 else
    CANDIDATES=$(ls -tr /boot/vmlinuz-* | head -n -${KEEP} | grep -v "$(uname -r)$" | cut -d- -f2- | awk '{print "linux-image-" $0 " linux-headers-" $0}' )
    REMOVED=$(dpkg -l| grep ^rc | awk '{print $2}' | grep -e linux-image -e linux-keaders)
+   OLD_HEADERS=$(dpkg -l|grep linux-headers | grep -v $(ls -tr /boot/vmlinuz-* | sed -e "s/^\/boot\/vmlinuz-/-e /" -e "s/-generic$//" | tr '\n' ' ') -e generic | awk '{print $2}')
 fi
 
 if [ -n "$REMOVED" ]; then
    # Purge old uninstalled kernels
    apt-get $APT_OPTS remove --purge $REMOVED
+fi
+
+if [ -n "$OLD_HEADERS" ]; then
+   # Purge old headers
+   apt-get $APT_OPTS remove --purge $OLD_HEADERS
 fi
 
 for c in $CANDIDATES; do
