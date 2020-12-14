@@ -46,16 +46,21 @@ while [ ! -z "$1" ]; do
 	esac
 done
 
-# Build our list of kernel packages to purge
-if [ $(uname -r|grep pve) ]; then
-   CANDIDATES=$(ls -tr /boot/vmlinuz-* | head -n -${KEEP} | grep -v "$(uname -r)$" | cut -d- -f2- | awk '{print "pve-kernel-" $0 " pve-headers-" $0}' )
-else
-   CANDIDATES=$(ls -tr /boot/vmlinuz-* | head -n -${KEEP} | grep -v "$(uname -r)$" | cut -d- -f2- | awk '{print "linux-image-" $0 " linux-headers-" $0}' )
-fi
+# Get kernel type: pve or not
+PVE_KERNEL=$(uname -r|grep pve)
 
-for c in $CANDIDATES; do
-	dpkg-query -s "$c" >/dev/null 2>&1 && PURGE="$PURGE $c"
-done
+# Build our list of kernel packages to purge
+if [ -n "$PVE_KERNEL" ]; then
+   CANDIDATES=$(ls -tr /boot/vmlinuz-* | head -n -${KEEP} | grep -v "$(uname -r)$" | cut -d- -f2- | awk '{print "pve-kernel-" $0 " pve-headers-" $0}' )
+   for c in $CANDIDATES; do
+       PURGE="$PURGE $(dpkg -l | grep -e $c | awk '{print $2}' |  tr "\n" " ")"
+   done
+else
+   CANDIDATES=$(ls -tr /boot/vmlinuz-* | head -n -${KEEP} | grep -v "$(uname -r)$" | grep -oiE '[0-9]+\.[0-9]+\.[0-9]+-[0-9]+')
+   for c in $CANDIDATES; do
+       PURGE="$PURGE $(dpkg -l|grep -e linux-.*$c | awk '{print $2}' |  tr "\n" " ")"
+   done
+fi
 
 if [ -z "$PURGE" ]; then
 	echo "No kernels are eligible for removal"
@@ -66,20 +71,14 @@ fi
 apt-get $APT_OPTS remove --purge $PURGE
 
 # Build our list of uninstalled kernel packages to purge
-if [ $(uname -r|grep pve) ]; then
+if [ -n "$PVE_KERNEL" ]; then
    REMOVED=$(dpkg -l| grep ^rc | awk '{print $2}' | grep -e pve-kernel -e pve-keaders)
 else
    REMOVED=$(dpkg -l| grep ^rc | awk '{print $2}' | grep -e linux-image -e linux-keaders)
-   OLD_HEADERS=$(dpkg -l|grep linux-headers | grep -v $(ls -tr /boot/vmlinuz-* | sed -e "s/^\/boot\/vmlinuz-/-e /" -e "s/-generic$//" | tr '\n' ' ') -e generic | awk '{print $2}')
-   OLD_MODULES=$(dpkg -l|grep linux-modules | grep -v $(ls -tr /boot/vmlinuz-* | sed -e "s/^\/boot\/vmlinuz-/-e /" -e "s/-generic$//" | tr '\n' ' ') -e generic | awk '{print $2}')
 fi
 
 # Purge old uninstalled kernels
 [ -n "$REMOVED" ] && apt-get $APT_OPTS remove --purge $REMOVED
 
-# Purge old headers
-[ -n "$OLD_HEADERS" ] && apt-get $APT_OPTS remove --purge $OLD_HEADERS
-
-# Purge old modules
-[ -n "$OLD_MODULES" ] && apt-get $APT_OPTS remove --purge $OLD_MODULES
-
+# Remove old /lib/modules kernel directories
+find /lib/modules -mindepth 1 -maxdepth 1 $(dpkg -l | grep -oiE 'linux-modules-[0-9]+\.[0-9]+\.[0-9]+-[0-9]+-generic' | sed 's/linux-modules-/-not -name /' | tr "\n" " ") -exec rm -fr {} \;
