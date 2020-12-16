@@ -74,7 +74,7 @@ apt-get $APT_OPTS remove --purge $PURGE
 if [ -n "$PVE_KERNEL" ]; then
    REMOVED=$(dpkg -l| grep ^rc | awk '{print $2}' | grep -e pve-kernel -e pve-keaders)
 else
-   REMOVED=$(dpkg -l| grep ^rc | awk '{print $2}' | grep -e linux-image -e linux-keaders)
+   REMOVED=$(dpkg -l| grep ^rc | awk '{print $2}' | grep -e linux-image -e linux-keaders -e linux-modules)
 fi
 
 # Purge old uninstalled kernels
