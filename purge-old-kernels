@@ -2,7 +2,7 @@
 #
 #    purge-old-kernels - remove old kernel packages
 #    Copyright (C) 2012      Dustin Kirkland <kirkland@ubuntu.com>
-#                  2017-2020 Esteban M. Navas Martín <algodelinux@gmail.com>
+#                  2017-2021 Esteban M. Navas Martín <algodelinux@gmail.com>
 #
 #    Authors: Dustin Kirkland <kirkland@ubuntu.com>
 #             Kees Cook <kees@ubuntu.com>
@@ -52,11 +52,16 @@ PVE_KERNEL=$(uname -r|grep pve)
 # Build our list of kernel packages to purge
 if [ -n "$PVE_KERNEL" ]; then
    CANDIDATES=$(ls -tr /boot/vmlinuz-* | head -n -${KEEP} | grep -v "$(uname -r)$" | cut -d- -f2- | awk '{print "pve-kernel-" $0 " pve-headers-" $0}' )
+
    for c in $CANDIDATES; do
        PURGE="$PURGE $(dpkg -l | grep -e $c | awk '{print $2}' |  tr "\n" " ")"
    done
 else
+   # Remove old /lib/modules kernel directories
+   find /lib/modules -mindepth 1 -maxdepth 1 $(dpkg -l | grep -oiE 'linux-modules-[0-9]+\.[0-9]+\.[0-9]+-[0-9]+-generic' | sed 's/linux-modules-/-not -name /' | tr "\n" " ") -exec rm -fr {} \;
+
    CANDIDATES=$(ls -tr /boot/vmlinuz-* | head -n -${KEEP} | grep -v "$(uname -r)$" | grep -oiE '[0-9]+\.[0-9]+\.[0-9]+-[0-9]+')
+
    for c in $CANDIDATES; do
        PURGE="$PURGE $(dpkg -l|grep -e linux-.*$c | awk '{print $2}' |  tr "\n" " ")"
    done
@@ -74,11 +79,13 @@ apt-get $APT_OPTS remove --purge $PURGE
 if [ -n "$PVE_KERNEL" ]; then
    REMOVED=$(dpkg -l| grep ^rc | awk '{print $2}' | grep -e pve-kernel -e pve-keaders)
 else
-   REMOVED=$(dpkg -l| grep ^rc | awk '{print $2}' | grep -e linux-image -e linux-keaders -e linux-modules)
+   REMOVED=$(dpkg -l| grep ^rc | awk '{print $2}' | grep -e linux-image -e linux-keaders)
 fi
 
 # Purge old uninstalled kernels
 [ -n "$REMOVED" ] && apt-get $APT_OPTS remove --purge $REMOVED
 
-# Remove old /lib/modules kernel directories
-find /lib/modules -mindepth 1 -maxdepth 1 $(dpkg -l | grep -oiE 'linux-modules-[0-9]+\.[0-9]+\.[0-9]+-[0-9]+-generic' | sed 's/linux-modules-/-not -name /' | tr "\n" " ") -exec rm -fr {} \;
+if [ -z "$PVE_KERNEL" ]; then
+   # Remove old /lib/modules kernel directories
+   find /lib/modules -mindepth 1 -maxdepth 1 $(dpkg -l | grep -oiE 'linux-modules-[0-9]+\.[0-9]+\.[0-9]+-[0-9]+-generic' | sed 's/linux-modules-/-not -name /' | tr "\n" " ") -exec rm -fr {} \;
+fi
