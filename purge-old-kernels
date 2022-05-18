@@ -51,16 +51,16 @@ PVE_KERNEL=$(uname -r|grep pve)
 
 # Build our list of kernel packages to purge
 if [ -n "$PVE_KERNEL" ]; then
-   CANDIDATES=$(ls /boot/vmlinuz-* | sort -t. -k 1,1n -k 2,2n -k 3,3n -k 4,4n | head -n -${KEEP} | grep -v "$(uname -r)$" | cut -d- -f2- | awk '{print "pve-kernel-" $0 " pve-headers-" $0}' )
+   CANDIDATES=$(ls /boot/vmlinuz-* | sed -e "s/^\/boot\/vmlinuz-//" | awk -F'[.-]' '{print $1"\t"$2"\t"$3"\t"$4"\t"$0}' | sort -k1 -k2 -k3 -k4 -n | cut -f5 | head -n -${KEEP} | grep -v "$(uname -r)$" | grep -oiE '[0-9]+\.[0-9]+\.[0-9]+-[0-9]+')
 
    for c in $CANDIDATES; do
-       PURGE="$PURGE $(dpkg -l | grep -e $c | awk '{print $2}' |  tr "\n" " ")"
+       PURGE="$PURGE $(dpkg -l | grep -e pve-.*$c | awk '{print $2}' |  tr "\n" " ")"
    done
 else
    # Remove old /lib/modules kernel directories
    find /lib/modules -mindepth 1 -maxdepth 1 $(dpkg --get-selections | grep 'linux-modules' | grep -v -e 'extra' | awk '{print $1}' | sed 's/linux-modules-/-not -name /' | tr "\n" " ") -exec rm -fr {} \;
 
-   CANDIDATES=$(ls /boot/vmlinuz-* | sort -t. -k 1,1n -k 2,2n -k 3,3n -k 4,4n | head -n -${KEEP} | grep -v "$(uname -r)$" | grep -oiE '[0-9]+\.[0-9]+\.[0-9]+-[0-9]+')
+   CANDIDATES=$(ls /boot/vmlinuz-* | sed -e "s/^\/boot\/vmlinuz-//" | awk -F'[.-]' '{print $1"\t"$2"\t"$3"\t"$4"\t"$0}' | sort -k1 -k2 -k3 -k4 -n | cut -f5 | head -n -${KEEP} | grep -v "$(uname -r)$" | grep -oiE '[0-9]+\.[0-9]+\.[0-9]+-[0-9]+')
 
    for c in $CANDIDATES; do
        PURGE="$PURGE $(dpkg -l|grep -e linux-.*$c | awk '{print $2}' |  tr "\n" " ")"
