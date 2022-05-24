@@ -20,7 +20,7 @@
 #    You should have received a copy of the GNU General Public License
 #    along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
-export VERSION=1.1
+export VERSION=1.2
 
 SCRIPT="$(basename $0)"
 
@@ -51,15 +51,15 @@ print_help () {
    echo "  -s,  --show-installed-kernels     display installed kernels"
    echo "  -k,  --keep N                     keep last N kernels"
    echo "                                    ALWAYS keep the currently running kernel"
-   echo "  -q,  --quiet                      remove old kernels without asking"
    echo "  -n,  --no-rm-modules              don't remove non installed kernels directories in /lib/modules"
+   echo "  -q,  --quiet                      pass -q option to apt-get"
+   echo "  -y,  --yes                        pass -y option to apt-get"
+   echo "  -o,  --option                     pass extra options to apt-get"
    echo
-   echo "Any unrecognized option will be passed straight through to apt-get"
-   echo 
 }
 
 parse_options() {
-   TEMP=`getopt -o hvsk:qn --long help,version,show-installed-kernels,keep:,quiet,no-rm-modules -n 'purge-old-kernels' -- "$@"`
+   TEMP=`getopt -o hvsk:qyno: --long help,version,show-installed-kernels,keep:,quiet,yes,no-rm-modules,option -n 'purge-old-kernels' -- "$@"`
 
    if [ $? != 0 ] ; then echo "Terminating..." >&2 ; exit 1 ; fi
 
@@ -88,8 +88,16 @@ parse_options() {
                  shift 2
                  ;;
        -q | --quiet )
-                 APT_OPTS="$APT_OPTS -qy"
+                 APT_OPTS="$APT_OPTS -q"
                  shift 1
+                 ;;
+       -y | --yes )
+                 APT_OPTS="$APT_OPTS -y"
+                 shift 1
+                 ;;
+       -o | --option )
+                 APT_OPTS="$APT_OPTS -o $2"
+                 shift 2
                  ;;
        -- )
                  shift
@@ -112,9 +120,7 @@ show_installed_kernels () {
 # NOTE: This script will ALWAYS keep the currently running kernel
 # NOTE: Default is to keep 2 more, user overrides with --keep N
 KEEP=2
-# NOTE: Any unrecognized option will be passed straight through to apt-get
 APT_OPTS=
-VERBOSE=false
 NO_RM_MODULES=false
 
 parse_options "$@"
