@@ -135,7 +135,7 @@ PVE_KERNEL=$(uname -r|grep pve)
 CANDIDATES=$(ls /boot/vmlinuz-* | sed -e "s/^\/boot\/vmlinuz-//" | awk -F'[.-]' '{print $1"\t"$2"\t"$3"\t"$4"\t"$0}' | sort -k1 -k2 -k3 -k4 -n | cut -f5 | head -n -${KEEP} | grep -v "$(uname -r)$" | grep -oiE '[0-9]+\.[0-9]+\.[0-9]+-[0-9]+')
 
 for c in $CANDIDATES; do
-    PURGE="$PURGE $(dpkg -l | awk '{print $2}' | grep -E "^(linux|pve).*$c" | tr "\n" " ")"
+    PURGE="$PURGE $(dpkg -l | awk '{print $2}' | grep -E "^(linux|proxmox).*$c" | tr "\n" " ")"
 done
 
 if [ -z "$PURGE" ]; then
