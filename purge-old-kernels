@@ -2,7 +2,7 @@
 #
 #    purge-old-kernels - remove old kernel packages
 #    Copyright (C) 2012      Dustin Kirkland <kirkland@ubuntu.com>
-#                  2017-2023 Esteban M. Navas Martín <algodelinux@gmail.com>
+#                  2017-2025 Esteban M. Navas Martín <algodelinux@gmail.com>
 #
 #    Authors: Dustin Kirkland <kirkland@ubuntu.com>
 #             Kees Cook <kees@ubuntu.com>
@@ -20,7 +20,7 @@
 #    You should have received a copy of the GNU General Public License
 #    along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
-export VERSION=1.3
+export VERSION=1.4
 
 SCRIPT="$(basename $0)"
 
@@ -122,6 +122,7 @@ show_installed_kernels () {
 KEEP=2
 APT_OPTS=
 NO_RM_MODULES=false
+PURGE=""
 
 parse_options "$@"
 
@@ -133,15 +134,9 @@ PVE_KERNEL=$(uname -r|grep pve)
 # Build our list of kernel packages to purge
 CANDIDATES=$(ls /boot/vmlinuz-* | sed -e "s/^\/boot\/vmlinuz-//" | awk -F'[.-]' '{print $1"\t"$2"\t"$3"\t"$4"\t"$0}' | sort -k1 -k2 -k3 -k4 -n | cut -f5 | head -n -${KEEP} | grep -v "$(uname -r)$" | grep -oiE '[0-9]+\.[0-9]+\.[0-9]+-[0-9]+')
 
-if [ -z "$PVE_KERNEL" ]; then
-   for c in $CANDIDATES; do
-      PURGE="$PURGE $(dpkg -l | awk '{print $2}' | grep -e ^linux.*$c |  tr "\n" " ")"
-   done
-else
-   for c in $CANDIDATES; do
-      PURGE="$PURGE $(dpkg -l | awk '{print $2}'| grep -e ^pve-.*$c |  tr "\n" " ")"
-   done
-fi
+for c in $CANDIDATES; do
+    PURGE="$PURGE $(dpkg -l | awk '{print $2}' | grep -E "^(linux|pve).*$c" | tr "\n" " ")"
+done
 
 if [ -z "$PURGE" ]; then
    echo "No kernels are eligible for removal"
@@ -152,11 +147,7 @@ fi
 apt-get $APT_OPTS remove --purge $PURGE
 
 # Build our list of uninstalled kernel packages to purge
-if [ -n "$PVE_KERNEL" ]; then
-   REMOVED=$(dpkg -l| grep ^rc | awk '{print $2}' | grep -e pve-kernel -e pve-keaders)
-else
-   REMOVED=$(dpkg -l| grep ^rc | awk '{print $2}' | grep -e linux-image -e linux-keaders)
-fi
+REMOVED=$(dpkg -l| grep ^rc | awk '{print $2}' | grep -E "(proxmox-kernel|proxmox-headers|linux-image|linux-headers)")
 
 # Purge old uninstalled kernels
 [ -n "$REMOVED" ] && apt-get $APT_OPTS remove --purge $REMOVED
