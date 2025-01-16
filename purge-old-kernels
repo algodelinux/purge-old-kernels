@@ -20,7 +20,7 @@
 #    You should have received a copy of the GNU General Public License
 #    along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
-export VERSION=1.4
+export VERSION=1.5
 
 SCRIPT="$(basename $0)"
 
@@ -123,6 +123,7 @@ KEEP=2
 APT_OPTS=
 NO_RM_MODULES=false
 PURGE=""
+COUNT_KERNEL_SERIES=0
 
 parse_options "$@"
 
@@ -136,6 +137,16 @@ CANDIDATES=$(ls /boot/vmlinuz-* | sed -e "s/^\/boot\/vmlinuz-//" | awk -F'[.-]' 
 
 for c in $CANDIDATES; do
     PURGE="$PURGE $(dpkg -l | awk '{print $2}' | grep -E "^(linux|proxmox).*$c" | tr "\n" " ")"
+
+    if [[ "$PURGE" == *"proxmox-kernel"* ]]; then
+       SERIES=$(echo "$c" | awk -F'.' '{print $1 "." $2}')
+       COUNT_INSTALLED_KERNEL_SERIES=$(dpkg -l | grep "proxmox-kernel" | grep -E "$SERIES.*pve" | wc -l)
+       COUNT_CANDIDATES_KERNEL_SERIES=$(echo $PURGE | tr ' ' '\n' | grep "proxmox-kernel" | grep -E "$SERIES.*pve" | wc -l)
+
+       if [ $COUNT_CANDIDATES_KERNEL_SERIES -eq $COUNT_INSTALLED_KERNEL_SERIES ]; then
+          PURGE="$PURGE proxmox-kernel-$SERIES proxmox-headers-$SERIES"
+       fi
+    fi
 done
 
 if [ -z "$PURGE" ]; then
