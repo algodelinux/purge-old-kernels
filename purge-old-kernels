@@ -20,7 +20,7 @@
 #    You should have received a copy of the GNU General Public License
 #    along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
-export VERSION=1.5
+export VERSION=1.6
 
 SCRIPT="$(basename $0)"
 
@@ -132,12 +132,16 @@ echo "We keep last $KEEP installed kernels"
 # Get kernel type: pve or not
 PVE_KERNEL=$(uname -r|grep pve)
 
+CAND_REGEX='[0-9]+\.[0-9]+\.[0-9]+(-[0-9]+)?([+-][a-z0-9]+)?(-[a-z0-9]+)?'
+
 # Build our list of kernel packages to purge
-CANDIDATES=$(ls /boot/vmlinuz-* | sed -e "s/^\/boot\/vmlinuz-//" | awk -F'[.-]' '{print $1"\t"$2"\t"$3"\t"$4"\t"$0}' | sort -k1 -k2 -k3 -k4 -n | cut -f5 | head -n -${KEEP} | grep -v "$(uname -r)$" | grep -oiE '[0-9]+\.[0-9]+\.[0-9]+-[0-9]+')
+CANDIDATES=$(ls /boot/vmlinuz-* | sed -e "s/^\/boot\/vmlinuz-//" | awk -F '[-.+]' '{printf "%d\t%d\t%d\t%s\t%s\n",$1,$2,$3,$4,$0}' | sort -k1 -k2 -k3 -k4 -n | cut -f5 | head -n -${KEEP} | grep -v "$(uname -r)$" | grep -oiE "$CAND_REGEX")
 
 for c in $CANDIDATES; do
-    PURGE="$PURGE $(dpkg -l | awk '{print $2}' | grep -E "^(linux|proxmox).*$c" | tr "\n" " ")"
+    escaped_c=$(printf '%s\n' "$c" | sed 's/[][().^$*+?{}|]/\\&/g')
+    PURGE="$PURGE $(dpkg -l | awk '{print $2}' | grep -E "^(linux|proxmox).*$escaped_c" | tr "\n" " ")"
 
+echo $PURGE
     if [[ "$PURGE" == *"proxmox-kernel"* ]]; then
        SERIES=$(echo "$c" | awk -F'.' '{print $1 "." $2}')
        COUNT_INSTALLED_KERNEL_SERIES=$(dpkg -l | grep "proxmox-kernel" | grep -E "$SERIES.*pve" | wc -l)
