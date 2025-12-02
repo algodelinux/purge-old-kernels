@@ -20,7 +20,7 @@
 #    You should have received a copy of the GNU General Public License
 #    along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
-export VERSION=1.6
+export VERSION=1.7
 
 SCRIPT="$(basename $0)"
 
@@ -117,6 +117,27 @@ show_installed_kernels () {
    echo -e "${GREEN}$INSTALLED_KERNELS${NC}"
 }
 
+clean_old_kernel_modules() {
+    # $1 = valor de PVE_KERNEL
+    # $2 = valor de NO_RM_MODULES (true/false)
+
+    local PVE_KERNEL="$1"
+    local NO_RM_MODULES="$2"
+
+    # Si no hay PVE kernel y NO_RM_MODULES es false → limpiar módulos viejos
+    if [ -z "$PVE_KERNEL" ] && [ "$NO_RM_MODULES" = false ]; then
+
+        # Eliminar directorios antiguos de /lib/modules
+        find /lib/modules -mindepth 1 -maxdepth 1 $(
+            dpkg --get-selections |
+            grep -E 'linux-image.[0-9].*' |
+            awk '{print $1}' |
+            sed 's/linux-image-/-not -name /'
+        ) -print0 | xargs -0 rm -rf
+    fi
+}
+
+
 # NOTE: This script will ALWAYS keep the currently running kernel
 # NOTE: Default is to keep 2 more, user overrides with --keep N
 KEEP=2
@@ -141,7 +162,6 @@ for c in $CANDIDATES; do
     escaped_c=$(printf '%s\n' "$c" | sed 's/[][().^$*+?{}|]/\\&/g')
     PURGE="$PURGE $(dpkg -l | awk '{print $2}' | grep -E "^(linux|proxmox).*$escaped_c" | tr "\n" " ")"
 
-echo $PURGE
     if [[ "$PURGE" == *"proxmox-kernel"* ]]; then
        SERIES=$(echo "$c" | awk -F'.' '{print $1 "." $2}')
        COUNT_INSTALLED_KERNEL_SERIES=$(dpkg -l | grep "proxmox-kernel" | grep -E "$SERIES.*pve" | wc -l)
@@ -150,8 +170,22 @@ echo $PURGE
        if [ $COUNT_CANDIDATES_KERNEL_SERIES -eq $COUNT_INSTALLED_KERNEL_SERIES ]; then
           PURGE="$PURGE proxmox-kernel-$SERIES proxmox-headers-$SERIES"
        fi
+    else
+       VERSION="${c%-*}"
+       PKG_HWE=$(dpkg -l | awk '{print $2}' | grep -E "^linux-hwe-.*-${VERSION}$")
+       if [ -n "$PKG_HWE" ]; then
+          PURGE="$PURGE $PKG_HWE"
+       fi
     fi
 done
+
+# Removed packages with configuration files (RC)
+REMOVED=$(dpkg -l | grep ^rc | awk '{print $2}' | grep -E "(proxmox-(kernel|headers)|linux-.*(image|headers|modules)|linux-hwe.*(image|headers|modules))")
+
+# Purge old uninstalled kernels
+[ -n "$REMOVED" ] && apt-get $APT_OPTS remove --purge $REMOVED
+
+clean_old_kernel_modules "$PVE_KERNEL" "$NO_RM_MODULES"
 
 if [ -z "$PURGE" ]; then
    echo "No kernels are eligible for removal"
@@ -161,13 +195,4 @@ fi
 # Purge old installed kernels
 apt-get $APT_OPTS remove --purge $PURGE
 
-# Build our list of uninstalled kernel packages to purge
-REMOVED=$(dpkg -l| grep ^rc | awk '{print $2}' | grep -E "(proxmox-kernel|proxmox-headers|linux-image|linux-headers)")
-
-# Purge old uninstalled kernels
-[ -n "$REMOVED" ] && apt-get $APT_OPTS remove --purge $REMOVED
-
-if [ -z "$PVE_KERNEL" ] && [ "$NO_RM_MODULES" = false ]; then
-   # Remove old /lib/modules kernel directories
-   find /lib/modules -mindepth 1 -maxdepth 1 $(dpkg --get-selections | grep -e 'linux-image.[0-9].*' | awk '{print $1}' | sed 's/linux-image-/-not -name /' | tr "\n" " ") -exec rm -fr {} \;
-fi
+clean_old_kernel_modules "$PVE_KERNEL" "$NO_RM_MODULES"
